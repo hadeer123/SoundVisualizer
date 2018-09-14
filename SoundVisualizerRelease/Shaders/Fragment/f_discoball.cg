@@ -1,0 +1,95 @@
+/****************************************************************
+ *	#	#	#	#	#	#	#	#	#	#	#	#	#	#	#	#
+ *
+ *	     Shader: Discoball Fragment Program
+ *	Description: This fragment program calculate in general the
+ *	             diffuse-, specular- term and map the texture,
+ *	             the reflection and refraction. As well as it
+ *	             makes tiles with help of a grid-pattern texture
+ *	             and makes every second tile to glowing.
+ *	      Group: Gunnar Busch, Hadeer Khaled and Philipp Petzold
+ *
+ *	#	#	#	#	#	#	#	#	#	#	#	#	#	#	#	#
+ ****************************************************************/
+
+// The incoming struct
+struct vert2frag {
+	float4 lightcolor		: COLOR0;		// light color
+	float  reflectionFactor : COLOR1;		// reflection factor
+	float2 texCoord			: TEXCOORD0;	// texture coordinates
+	float3 normal			: TEXCOORD1;	// normal in ws
+	float3 lightDir			: TEXCOORD2;	// light position in ws
+	float3 viewDir			: TEXCOORD3;	// view position in ws
+	float3 R				: TEXCOORD4;	// reflection vector
+	float3 TRed				: TEXCOORD5;	// refracted color - red
+	float3 TGreen			: TEXCOORD6;	// refracted color - green
+	float3 TBlue			: TEXCOORD7;	// refracted color - blue
+};
+
+
+void ffunc_discoball(	vert2frag IN,					// incoming struct object
+
+						out float4 fragmentOut : COLOR,	// outgoing fragment color
+
+						uniform float shiniess,			// shiniess fector for the specular term
+						uniform float soundInput,		// sound value - read out of the bass
+						uniform float time,				// time value ** deleted **
+						uniform float4 materialAmbient,	// material ambient color
+						uniform float4 globalAmbient,	// global ambient color
+						uniform float4 materialEmissive,// material emissive color
+
+						uniform sampler2D decal,			// main texture
+						uniform sampler2D pattern,			// grid-pattern for tile calculation
+						uniform samplerCUBE environmentMap )// cube map of the environment
+{
+	// Compute textures
+	float4 pureTexture = tex2D(decal, IN.texCoord);
+
+	// Compute diffuse lighting (Lambert)
+	float3 Ln = normalize(IN.lightDir);
+	float3 Nn = normalize(IN.normal);
+	float diffuseLight = max(dot(Nn, Ln), 0);
+
+	float3 diffuse = pureTexture.rgb *  diffuseLight.xxx * IN.lightcolor.xyz;
+
+	// Compute specular lighting (Blinn)
+	float3 Vn = normalize(IN.viewDir);
+	float3 Hn = normalize(Ln + Vn);
+	float specularLight = pow(max(dot(Nn, Hn), 0), shiniess);
+	if (diffuseLight <= 0) specularLight = 0;
+
+	float3 specular = specularLight.xxx * IN.lightcolor.xyz;
+
+	// Fetch the reflected environment color
+	float4 reflectedColor = texCUBE(environmentMap, IN.R);
+
+	// Compute the refracted environment color
+	float4 refractedColor;
+
+	refractedColor.r = texCUBE(environmentMap, IN.TRed).r;
+	refractedColor.g = texCUBE(environmentMap, IN.TGreen).g;
+	refractedColor.b = texCUBE(environmentMap, IN.TBlue).b;
+	refractedColor.a = 1;
+
+	// Compute the final color
+	float4 environment = lerp(refractedColor, reflectedColor, IN.reflectionFactor);
+
+	// Compute pattern for calculating tiles
+	float4 patternCheck = tex2D(pattern, IN.texCoord);
+	float glow = 0;
+
+	// if the pattern tile is black
+	if(patternCheck.r == glow && patternCheck.g == glow && patternCheck.b == glow)
+	{
+		float3 a = lerp(diffuse.rgb * (soundInput * 50 + 1) + specular.rgb * (soundInput * 50 + 1) + materialEmissive.rgb, environment, 0.6);
+		float3 b = lerp(diffuse.rgb + specular.rgb  + materialEmissive.rgb, environment, 0.5);
+		// Because of the sound input value can be zero, the shown color shouldnt be darker than normal
+		fragmentOut.rgb = length(a) > length(b) ? a : b;
+	}
+	// if the pattern tile is white
+	else
+	{
+		fragmentOut.rgb = diffuse.rgb + specular.rgb  + materialEmissive.rgb + environment * 0.1;
+	}
+	fragmentOut.a = 1;
+}

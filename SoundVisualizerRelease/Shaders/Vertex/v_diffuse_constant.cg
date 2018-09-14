@@ -1,0 +1,38 @@
+/****************************************************************
+ *	#	#	#	#	#	#	#	#	#	#	#	#	#	#	#	#
+ *
+ *	     Shader: Diffuse Constant Vertex Program
+ *	Description: This vertex program calculate in general
+ *	             the position in world space and pass texture
+ *	             coordinates and light color.
+ *	      Group: Gunnar Busch, Hadeer Khaled and Philipp Petzold
+ *
+ *	#	#	#	#	#	#	#	#	#	#	#	#	#	#	#	#
+ ****************************************************************/
+
+// The passing struct
+struct vert2frag {
+  float4 position : POSITION;	// position in ws
+  float4 color    : COLOR0;		// light color
+  float2 texCoord : TEXCOORD0;	// texture coordinates
+};
+
+vert2frag vfunc_diffuse_constant( float4 position : POSITION,	// position in os
+								  float2 texCoord : TEXCOORD0,	// texture coordinates
+
+								  uniform float4 constantColor,	// light color
+								  uniform float4x4 mvp )		// model-view-projection matrix
+{
+  vert2frag OUT;
+
+  // pass texture coordinates to fragment program
+  OUT.texCoord = texCoord;
+
+  // calculate position in world space and pass to fragment program
+  OUT.position = mul(mvp, position);
+
+  // pass color to fragment program
+  OUT.color = constantColor;
+
+  return OUT;	
+}

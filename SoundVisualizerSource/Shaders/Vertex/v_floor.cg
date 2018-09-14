@@ -1,0 +1,72 @@
+/****************************************************************
+ *	#	#	#	#	#	#	#	#	#	#	#	#	#	#	#	#
+ *
+ *	     Shader: Floor Vertex Program
+ *	Description: In the Vertex Program the parameters are calculated
+ *	             to world space and passed on to the fragment shader
+ *	             The view and light vectors are allready in world space
+ *	             and are just passed on to the fragment shader.
+ *	             The world vector for the normal, tangent and binormal
+ *	             are passed to calculate the tangent matrix in the 
+ *	             fragment shader.
+ *	      Group: Gunnar Busch, Hadeer Khaled and Philipp Petzold
+ *
+ *	#	#	#	#	#	#	#	#	#	#	#	#	#	#	#	#
+ ****************************************************************/
+
+struct vert2frag {
+  float4 position	: POSITION;		//	Vertex position in Clip Space
+  float4 color		: COLOR;		//	Light-Color
+  float2 texCoord	: TEXCOORD0;	//	Texture Coordinate in texture space
+  float3 lightDir	: TEXCOORD1;	//	Light-Position in world space
+  float3 viewDir	: TEXCOORD2;	//	Camera-Position in world space
+
+  float3 positionW	: TEXCOORD3;    //	Vertex position in world space
+  float3 normalW	: TEXCOORD4;    //	Normal vector in world space
+  float3 tangentW	: TEXCOORD5;    //	Tangent vector in world space
+  float3 binormalW	: TEXCOORD6;	//	BINORMAL vector in world space
+};
+
+vert2frag vfunc_floor(	float3 position :	POSITION,	//	Vertex position in object space
+						float3 normal	:	NORMAL,		//	Normal vector in object space
+						float2 texCoord	:	TEXCOORD0,	//	Texture Coordinate in texture space
+				
+				uniform float4 constantColor,			//	Light color
+				uniform float3 lightPos,				//	Texture Coordinate in world space
+				uniform float3 viewPos,					//	Camera-Position in world space
+				uniform float4x4 mvp,					//	MODEL-VIEW-PROJECTION
+				uniform float4x4 m2w,					//	MODEL-TO-WORLD
+				uniform float4x4 m2wIT)					//	MODEL-TO-WORLD-INVERSE-TRANSFORMATION
+{
+  vert2frag OUT;
+
+  // Pass parameters to fragment shader
+  OUT.color = constantColor;
+  OUT.texCoord = texCoord;
+  OUT.lightDir = lightPos;
+  OUT.viewDir = viewPos;
+  
+  OUT.position	=	mul(mvp, float4(position,1));			//	Calculate vertex position in clip space
+  OUT.positionW	=	mul(m2w, float4(position,1));			//	Calculate vertex position in world space
+
+  float3 T = cross(normal,float3(1.0,0.0,0.0));				//	Calculate a tangent in object space by taking the cross product of the normal and a vector v = (1,1,1)
+  T = normalize(T);											//	The Vector needs to be normalized to get a unit length
+  OUT.tangentW = normalize(mul(m2wIT, float4(T,0))).xyz;	//	Calculate tangent vector in world space and normalize it
+  OUT.normalW = mul(m2wIT, float4(normal,0)).xyz;			//	Calculate normal vector in world space; The normal is normalized anyway
+  OUT.binormalW = cross(OUT.normalW, OUT.tangentW).xyz;		//	Calculate binormal vector in world space; Is normalized because both input vectors are
+ 
+  return OUT;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+

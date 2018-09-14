@@ -1,0 +1,42 @@
+struct vert2frag {
+  float4 position : POSITION;
+  float4 color    : COLOR0;
+  float2 texCoord : TEXCOORD0;
+  float3 normal	  : TEXCOORD1;
+  float3 lightW   : TEXCOORD2;
+  float3 viewW : TEXCOORD3;
+};
+
+vert2frag vfunc_specular(	float4 position : POSITION,
+					float3 normal: NORMAL,
+					float2 texCoord: TEXCOORD0,
+		           uniform float4 constantColor
+				   ,uniform float3 lightPos
+				   ,uniform float3 viewPos
+				   ,uniform float4x4 mvp
+				   ,uniform float4x4 m2w
+				   ,uniform float4x4 m2wIT)
+{
+  vert2frag OUT;
+
+  // pass texture coordinates to fragment program
+  OUT.texCoord = texCoord;
+
+  // calculate position in world space and pass to fragment program
+  OUT.position = mul(mvp, position);
+
+  // calculate normal in world space and pass to fragment program
+  OUT.normal   = mul(m2wIT, float4(normal, 1.0));
+
+  // calculate light Vector in world space and pass to fragment program
+  float3 positionW = mul(m2w, position);
+  OUT.lightW = lightPos - positionW;
+
+  // calculate view Vector in world space and pass to fragment program
+  OUT.viewW = viewPos - position;
+
+  // pass color to fragment program
+  OUT.color    = constantColor;
+
+  return OUT;	
+}

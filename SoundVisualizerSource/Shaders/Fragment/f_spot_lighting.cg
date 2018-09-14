@@ -1,0 +1,56 @@
+struct vert2frag {
+  float4 position   : POSITION;
+  float4 lightColor : COLOR0;
+  float2 texCoord   : TEXCOORD0;
+  float3 normal	    : TEXCOORD1;
+  float3 lightPos   : TEXCOORD2;
+  float3 viewDir    : TEXCOORD3;
+  float3 spotDir    : TEXCOORD4;
+};
+
+/*struct Light {
+	float4 position;
+	float4 direction;
+	float4 cosLightAngle;
+	float4 color;
+}*/
+
+void ffunc_spot_lighting(vert2frag IN,
+			out float4 fragmentOut : COLOR,
+			uniform float4 materialAmbient,
+			uniform float4 globalAmbient,
+			uniform float4 materialEmissive,
+			uniform sampler2D tex)
+{
+  // sample texture and set output color with sampled value
+  float4 pureTexture = tex2D(tex, IN.texCoord);
+
+  // calculate diffuse lighting (Lambert)
+  float3 Ln = normalize(IN.lightPos);
+  float3 Nn = normalize(IN.normal);
+
+  float diffuseLight = max(dot(Nn, Ln), 0);
+
+  if(diffuseLight < 0.8)
+  {
+	diffuseLight = 0.2;
+  }
+
+  float3 diffuse = pureTexture.rgb *  diffuseLight.xxx * IN.lightColor.xyz;
+
+  fragmentOut.rgb = diffuse + ( materialAmbient.rgb * globalAmbient.rgb ) + materialEmissive.rgb;
+
+  fragmentOut.a = 1;
+}
+
+// Returns true if P lies in spotlight cone
+/*float isInSpotlight(float3 P, Light light)
+{
+	float3 Vn = normalize(P - light.position);
+	float cosCone = light.cosLightAngle;
+	float cosDirection = dot(Vn, light.direction);
+	if(cosCone <= cosDirection)
+		return 1;
+	else
+		return 0;
+}*/

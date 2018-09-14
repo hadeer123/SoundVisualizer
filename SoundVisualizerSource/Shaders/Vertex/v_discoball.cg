@@ -1,0 +1,88 @@
+/****************************************************************
+ *	#	#	#	#	#	#	#	#	#	#	#	#	#	#	#	#
+ *
+ *	     Shader: Discoball Vertex Program
+ *	Description: This vertex program calculate in general
+ *	             all transformations for the diffuse-, specular-
+ *	             term and the reflection as well as the
+ *	             refractions verticies for the environment
+ *	             mapping.
+ *	      Group: Gunnar Busch, Hadeer Khaled and Philipp Petzold
+ *
+ *	#	#	#	#	#	#	#	#	#	#	#	#	#	#	#	#
+ ****************************************************************/
+
+// The passing struct
+struct vert2frag {
+	float4 position			: POSITION;		// position in ws
+	float4 color			: COLOR0;		// light color
+	float  reflectionFactor : COLOR1;		// reflection factor
+	float2 texCoord			: TEXCOORD0;	// texture coordinates
+	float3 normal			: TEXCOORD1;	// normal in ws
+	float3 lightW			: TEXCOORD2;	// light position in ws
+	float3 viewW			: TEXCOORD3;	// view position in ws
+	float3 R				: TEXCOORD4;	// reflection vector
+	float3 TRed				: TEXCOORD5;	// refracted color - red
+	float3 TGreen			: TEXCOORD6;	// refracted color - green
+	float3 TBlue			: TEXCOORD7;	// refracted color - blue
+};
+
+// main function
+vert2frag vfunc_discoball(	float4 position : POSITION,		// position in os
+							float3 normal	: NORMAL,		// normal
+							float2 texCoord	: TEXCOORD0,	// texture coordinates
+
+							uniform float fresnelBias,		// fresnel bais for refraction
+							uniform float fresnelScale,		// fresnel scale for refraction
+							uniform float fresnelPower,		// fresnel power for refraction
+				   			uniform float3 etaRatio,		// eta Ration for refraction
+							uniform float3 lightPos,		// light position
+							uniform float3 viewPos,			// view position
+							uniform float4 constantColor,	// light color
+
+							uniform float4x4 mvp,			// model-view-projection matrix
+							uniform float4x4 m2w,			// model-view matrix
+							uniform float4x4 m2wIT )		// inverse-transpose model-view matrix
+{
+	vert2frag OUT;
+
+	// Pass texture coordinates
+	OUT.texCoord = texCoord;
+
+	// Compute position in world space and pass
+	OUT.position = mul(mvp, position);
+
+	// Compute normal in world space and pass
+	OUT.normal   = mul(m2wIT, float4(normal, 1.0));
+
+	// Compute position in world space
+	float3 positionW = mul(m2w, position);
+
+	// Compute light vector in world space and pass
+	OUT.lightW = lightPos - positionW;
+
+	// Compute view vector in world space and pass
+	OUT.viewW = viewPos - position;
+
+	// Pass light color
+	OUT.color = constantColor;
+
+	// Compute normal for reflection calculation
+	float3 N = mul((float3x3)m2w, normal);
+	N = normalize(N);
+
+	// Compute the incident, reflected, and refracted vectors
+	float3 I = positionW - viewPos;
+
+	OUT.R = reflect(I, N);
+	I = normalize(I);
+
+	OUT.TRed   = refract(I, N, etaRatio.x);
+	OUT.TGreen = refract(I, N, etaRatio.y);
+	OUT.TBlue  = refract(I, N, etaRatio.z);
+
+	// Compute the reflection factor
+	OUT.reflectionFactor = fresnelBias + fresnelScale * pow(1 + dot(I, N), fresnelPower);
+
+	return OUT;	
+}

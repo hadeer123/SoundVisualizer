@@ -1,0 +1,36 @@
+/****************************************************************
+ *	#	#	#	#	#	#	#	#	#	#	#	#	#	#	#	#
+ *
+ *	     Shader: Diffuse Constant Fragment Program
+ *	Description: This fragment program calculate in general
+ *	             the texture mapping and add the light color.
+ *	      Group: Gunnar Busch, Hadeer Khaled and Philipp Petzold
+ *
+ *	#	#	#	#	#	#	#	#	#	#	#	#	#	#	#	#
+ ****************************************************************/
+
+// The incoming struct
+struct vert2frag {
+  float4 position   : POSITION;
+  float4 lightcolor : COLOR0;
+  float2 texCoord   : TEXCOORD0;
+};
+
+// main function 
+void ffunc_diffuse_constant( vert2frag IN,						// incoming struct object
+
+							 out float4 fragmentOut : COLOR,	// outgoing fragment color
+
+							 uniform float4 materialAmbient,	// material ambient color
+							 uniform float4 globalAmbient,		// global ambient color
+							 uniform float4 materialEmissive,	// material emissive
+							 uniform sampler2D tex )			// texture sampler
+{
+  // sample texture
+  float4 pureTexture = tex2D(tex, IN.texCoord);
+
+  // simple diffuse calculation
+  float3 diffuse = pureTexture.rgb * IN.lightcolor.xyz;
+  fragmentOut.rgb = diffuse + ( materialAmbient.rgb * globalAmbient.rgb ) + materialEmissive.rgb;
+  fragmentOut.a = 1;
+}

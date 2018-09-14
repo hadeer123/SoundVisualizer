@@ -1,0 +1,53 @@
+/****************************************************************
+ *	#	#	#	#	#	#	#	#	#	#	#	#	#	#	#	#
+ *
+ *	     Shader: Animated Textures Fragment Program
+ *	Description: This fragment program calculate in general
+ *	             the position in world space and pass texture
+ *	             coordinates and light color.
+ *	      Group: Gunnar Busch, Hadeer Khaled and Philipp Petzold
+ *
+ *	#	#	#	#	#	#	#	#	#	#	#	#	#	#	#	#
+ ****************************************************************/
+
+// The incoming struct
+struct vert2frag {
+  float4 position   : POSITION;
+  float4 lightcolor : COLOR0;
+  float2 texCoord   : TEXCOORD0;
+};
+
+// main function
+void ffunc_animated_textures( vert2frag IN,						// incoming struct object
+
+							  out float4 fragmentOut : COLOR,	// outgoing fragment color
+
+							  uniform float4 materialAmbient,	// material ambient color
+							  uniform float4 globalAmbient,		// global ambient color
+							  uniform float4 materialEmissive,	// material emissive color
+
+							  uniform sampler2D tex1,			// main texture - moves on x-axes
+							  uniform sampler2D tex2,			// second texture, visibility by sound factor - moves on y-axes
+							  uniform sampler2D tex3,			// third texture, nearly transparant - moves diagonal
+
+							  uniform float time,				// time facotr
+							  uniform float factor,				// first sound factor
+							  uniform float factor2 )			// second sound factor ** deleted **
+{
+  // Compute textures coordinates of main texture
+  float2 tex1Coords = float2(IN.texCoord.x + time / 1000, IN.texCoord.y);
+
+  // Compute textures coordinates of second texture
+  float2 tex2Coords = float2(IN.texCoord.x, IN.texCoord.y + time / 1000);
+
+  // Compute textures coordinates of third texture
+  float2 tex3Coords = float2(IN.texCoord.x + time / 1000, IN.texCoord.y + time / 1000);
+
+  // Compute fragment color, combine all three textures within the sound factors
+  float4 pureTexture = lerp(tex2D(tex1, tex1Coords), tex2D(tex2, tex2Coords), factor);
+  pureTexture = lerp(pureTexture, tex2D(tex3, tex3Coords), 0.1);
+
+  // Compute final color with the light color
+  fragmentOut.rgb = pureTexture.rgb * IN.lightcolor.rgb;
+  fragmentOut.a = 1;
+}

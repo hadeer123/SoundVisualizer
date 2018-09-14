@@ -1,0 +1,173 @@
+/****************************************************************
+ *	#	#	#	#	#	#	#	#	#	#	#	#	#	#	#	#
+ *
+ *	     Shader: Floor Fragment Program
+ *	Description: In the fragment shader colored tiles are calculated
+ *	             by assigning a defined color value to a fragment
+ *	             based on its position.All lighting calculations will
+ *	             be performed in world space instead of object space. 
+ *	             The reason is, that we want to combine enviroment 
+ *	             mapping with normal mapping. The enviroment cube 
+ *	             exists in world space and therefore to vector of the
+ *	             reflacted light also needs to be in world space. 
+ *	             So its easier to transform the normal from the normal
+ *	             -map from tangent-space to world space instead of 
+ *	             transforming the other vectors to tangent-space.
+ *	             The surface normal from the normal map needs to be 
+ *	             converted from tangent space to world space by using 
+ *	             the transpose of the orthonormalized rotation matrix. 
+ *	             Therefore 3 vectors are required to build the matrix. 
+ *	             These are the normal, tangent binormal vectors.
+ *	      Group: Gunnar Busch, Hadeer Khaled and Philipp Petzold
+ *
+ *	#	#	#	#	#	#	#	#	#	#	#	#	#	#	#	#
+ ****************************************************************/
+
+//	Function to expand range-compress a vector back to their signed range.
+//	The normals are stored in a normal map and therefore every color channel (rgb) is storing one direction of the normal in x, y and z.
+//	The color values are stored in the range of [0->1]. Therefore the vectors have to be store as unsigned values in the range of [-1,1]
+//	range-compressed this way: color = 0.5 * normal + 0.5;
+float3  expand(float3 v){return (v - 0.5) * 2;}
+
+struct vert2frag {
+  float4 lightcolor	: COLOR;		//	Light-Color
+  float2 texCoord	: TEXCOORD0;	//	Texture Coordinate in texture space
+  float3 lightDir	: TEXCOORD1;	//	Light-Position in world space
+  float3 viewDir	: TEXCOORD2;	//	Camera-Position in world space
+
+  float3 positionW	: TEXCOORD3;    //	Vertex position in world space
+  float3 normalW	: TEXCOORD4;    //	Normal vector in world space
+  float3 tangentW	: TEXCOORD5;    //	Tangent vector in world space
+  float3 binormalW	: TEXCOORD6;	//	BINORMAL vector in world space
+};
+
+void ffunc_floor(	vert2frag IN,						//	Struct as input
+
+					out float4 fragmentOut : COLOR,		//	Float4 Color-Value as output
+														//	The Material attributes:
+				uniform float4 materialAmbient,			//	The ambient value of the material
+				uniform float4 globalAmbient,			//	The ambient value of the light
+				uniform float4 materialEmissive,		//	The emissive value of the material
+				uniform float3 materialDiffuse,			//	The diffuse value of the material
+				uniform float3 materialSpecular,		//	The specular value of the material
+				uniform float materialShiniess,			//	The material shininess
+
+				uniform float reflection,				//	The reflaction value needed for the reflaction
+				uniform float emissiveBoost,			//	A value to extend the emissive light in the scene
+				uniform float soundInput,				//	A input value that is generated from the bass [0->0.45]
+				uniform float random,					//	A random vlaue that is generated every 25 frames [0->99]
+				uniform float tiles,					//	The number of tiles that are mapped on the object
+
+				uniform float3 color1,					//	5 color values for the tiles
+				uniform float3 color2,					
+				uniform float3 color3,					
+				uniform float3 color4,					
+				uniform float3 color5,					
+
+				uniform samplerCUBE cubeSampler,		//	The cube map for the reflaction
+				uniform sampler2D colorTex,				//	The color map
+				uniform sampler2D normTex)				//	The normal map
+{
+	
+	//------------------------------------------------------
+	// CALCULATING COLERED TILES
+	//------------------------------------------------------
+	float3 mixColor[5];									//	Save the colors in an array
+	mixColor[0] = color1;
+	mixColor[1] = color2;
+	mixColor[2] = color3;
+	mixColor[3] = color4;
+	mixColor[4] = color5;
+
+	float3 outColor;
+
+	float xFactor	= (1/tiles);						//	Calculate the x-size of a tile [0.0->1.0]
+	float yFactor	= (1/(2*tiles));					//	Calculate the y-size of a tile [0.0->1.0]
+	
+	int arrCount	= 0;								//	Counter to choose a color of the color-array for the tiles
+	float glow		= 0;								//	State of the glowing of the tiles [0,1]
+	int counter		= 0;								//	Counter
+
+	int rdm = random;									
+	int ges = tiles*2*tiles;
+
+	//	The loop retrieves in which tile the fragment is orientated and assigns it a certain color value from the color array
+	//	The array is counting till the last value and gets than reset.
+	//	The range of a tile in x is : x*xFactor -> (x+1)*xFactor
+	//	The range of a tile in y is : y*yFactor -> (y+1)*yFactor
+	//	The glow is set to one to when counter % 2 == rdm % 2 is forfilled -> sets the glowing for the even and odd tiles
+
+	for(int x = 0; x <= tiles; x++)						
+	{
+		for(int y = 0; y <= 2*tiles; y++)
+		{
+			if(IN.texCoord.x > x*xFactor && IN.texCoord.x <= (x+1)*xFactor && IN.texCoord.y > y*yFactor && IN.texCoord.y <= (y+1)*yFactor)
+			{
+				outColor = mixColor[arrCount]; 
+				if(counter % 2 == rdm % 2) glow = 1;
+			} 
+			counter++;
+			arrCount++;
+			if(arrCount == 5)arrCount = 0;
+		}
+	}
+
+	//------------------------------------------------------
+	// CALCULATING VECTORS
+	//------------------------------------------------------
+
+    float3x3 tangentMatrix = float3x3( normalize( IN.tangentW ),	//	Rotation matrix to transform the normal to world space
+                                       normalize( IN.binormalW ),
+                                       normalize( IN.normalW ) );
+	
+	float3 normalTex = tex2D(normTex, IN.texCoord).xyz;				//	Fetch the normal in texture space
+	float3 normal = normalize(expand(normalTex));					//	Normalize and expand range-compress the normal in tangent space
+	normal = mul(normal,tangentMatrix);								//	Transform from tangent space to world-space
+																	
+	float3 normLight = normalize(IN.lightDir - IN.positionW).xyz;	//	calculate light vector in world space and normalize it
+	normLight = expand(normLight);									//	expand vector -> enforces the bump
+
+	float3 normView = normalize(IN.viewDir - IN.positionW).xyz;		//	calculate view vector in world space and normalize it
+	normView = expand(normView);									//	expand vector -> enforces the bump
+
+	float3 normHalfangle = normalize(normLight + normView);			//	calculate halfway vector and normalize it
+	
+	//------------------------------------------------------
+	// CALCULATING LIGHT AND REFLACTION
+	//------------------------------------------------------
+	
+	float specular = 0;
+	float diffuse = saturate(dot(normal, normLight));				//	Calculate diffuse dot product and clamps it to the range of [0,1] 
+
+	if(diffuse > 0)													//	Clamp when the diffuse term is clamped to 0
+	{
+		specular = pow(saturate(dot(normal, normHalfangle)),materialShiniess);	//	Calculate specular dot product and clamp it to the range of [0,1]
+	}
+	
+	//Calculate Reflactions
+	float3 P = float3(100,0,0);												//	Position factor that manipulates the position to make the reflaction better visible on the floor
+	float3 I = ((IN.positionW - (P - IN.positionW)) - IN.viewDir).xyz;		//	Incident vector (from eye to vertex)
+	float3 R = reflect(I,normalize(normalTex));								//	calculating the reflection vector in world space, no nomalization is needed, becaus efor cubemap lookup just the orientation is importnat
+
+	//------------------------------------------------------
+	// CALCULATING COLOR PASSES
+	//------------------------------------------------------
+	
+	float3 reflectedColor	= texCUBE(cubeSampler,R);								//	look up	of the reflected color with from the cubemap and the reflaction vector
+	float3 coloredTex		= tex2D(colorTex, IN.texCoord).xyz;						//	look up of color from the texture and the texture coordinates
+	float3 diffuseColor		= (materialDiffuse * IN.lightcolor * diffuse).xyz;		//	Calculating the diffuse color
+	float3 specularColor	= (materialSpecular * IN.lightcolor * specular).xyz;	//	Calculating the specular color
+
+	//	Calculating  the final color:
+	//	Fcolor  -> The color of the tiles mulitiplied with the sound-input (bass frequency)
+	//	Fcolor2 -> The "standartd color", when the music is off
+	//	The condition assures, that the Fcolor value if the music is turned on never drops below the standard color
+	float3 Fcolor = ((outColor + coloredTex * 0.8)* coloredTex) * (soundInput * 5);	
+	float3 Fcolor2 = (outColor + coloredTex * 0.8)* coloredTex * ((materialEmissive * emissiveBoost) + (materialAmbient * globalAmbient) + diffuseColor + specularColor);
+	Fcolor =  length(Fcolor2) < length(Fcolor) && glow == 1 ? Fcolor : Fcolor2;
+
+	float3 Frefl= lerp(Fcolor, reflectedColor, reflection);		//	Combine the reflection color to the final color
+	
+	fragmentOut.xyz = Frefl;									//	Output the final color
+	fragmentOut.w = 1;
+}

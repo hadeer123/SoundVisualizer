@@ -1,0 +1,43 @@
+/****************************************************************
+ *	#	#	#	#	#	#	#	#	#	#	#	#	#	#	#	#
+ *
+ *	     Shader: Diffuse Fragment Program
+ *	Description: This fragment program calculate in general
+ *	             the diffuse light term and multiply it with
+ *	             the texture.
+ *	      Group: Gunnar Busch, Hadeer Khaled and Philipp Petzold
+ *
+ *	#	#	#	#	#	#	#	#	#	#	#	#	#	#	#	#
+ ****************************************************************/
+
+// The incoming struct
+struct vert2frag {
+  float4 lightcolor: COLOR;
+  float2 texCoord  : TEXCOORD0;
+  float3 normal	   : TEXCOORD1;
+  float3 lightDir  : TEXCOORD2;
+  float3 viewDir   : TEXCOORD3;
+};
+
+void ffunc_diffuse(	vert2frag IN,						// incoming struct object
+
+					out float4 fragmentOut : COLOR,		// outgoing fragment color
+
+					uniform float4 materialAmbient,		// material ambient color
+					uniform float4 globalAmbient,		// global ambient color
+					uniform float4 materialEmissive,	// material emissive
+					uniform sampler2D tex )				// texture sampler
+{
+  // sample texture and set output color with sampled value
+  float4 pureTexture = tex2D(tex, IN.texCoord);
+
+  // calculate diffuse lighting (Lambert)
+  float3 Ln = normalize(IN.lightDir);
+  float3 Nn = normalize(IN.normal);
+  float diffuseLight = max(dot(Nn, Ln), 0);
+
+  float3 diffuse = pureTexture.rgb *  diffuseLight.xxx * IN.lightcolor.xyz;
+
+  fragmentOut.rgb = diffuse + ( materialAmbient.rgb * globalAmbient.rgb ) + materialEmissive.rgb;
+  fragmentOut.a = 1;
+}

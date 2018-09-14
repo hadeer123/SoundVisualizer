@@ -1,0 +1,93 @@
+/****************************************************************
+ *	#	#	#	#	#	#	#	#	#	#	#	#	#	#	#	#
+ *
+ *	     Shader: Bump Fragment Program
+ *	Description: This fragment program gets the normal from a normal
+ *	             map and transforms it from the tangent to world space by
+ *	             using a rotation matrix. From the vectors in world space
+ *	             the diffuse and specular term is calculated.
+ *	      Group: Gunnar Busch, Hadeer Khaled and Philipp Petzold
+ *
+ *	#	#	#	#	#	#	#	#	#	#	#	#	#	#	#	#
+ ****************************************************************/
+
+//	Function to expand range-compress a vector back to their signed range.
+//	The normals are stored in a normal map and therefore every color channel (rgb) is storing one direction of the normal in x, y and z.
+//	The color values are stored in the range of [0->1]. Therefore the vectors have to be store as unsigned values in the range of [-1,1]
+//	range-compressed this way: color = 0.5 * normal + 0.5;
+float3  expand(float3 v){return (v - 0.5) * 2;}
+
+struct vert2frag {
+  float4 lightcolor	: COLOR;		//	Light-Color
+  float2 texCoord	: TEXCOORD0;	//	Texture Coordinate in texture space
+  float3 lightDir	: TEXCOORD1;	//	Light-Position in world space
+  float3 viewDir	: TEXCOORD2;	//	Camera-Position in world space
+
+  float3 positionW	: TEXCOORD3;    //	Vertex position in world space
+  float3 normalW	: TEXCOORD4;    //	Normal vector in world space
+  float3 tangentW	: TEXCOORD5;    //	Tangent vector in world space
+  float3 binormalW	: TEXCOORD6;	//	BINORMAL vector in world space
+};
+
+void ffunc_bump(	vert2frag IN,						//	Struct as input
+
+					out float4 fragmentOut : COLOR,		//	Float4 Color-Value as output
+														//	The Material attributes:
+				uniform float4 materialAmbient,			//	The ambient value of the material
+				uniform float4 globalAmbient,			//	The ambient value of the light
+				uniform float4 materialEmissive,		//	The emissive value of the material
+				uniform float3 materialDiffuse,			//	The diffuse value of the material
+				uniform float3 materialSpecular,		//	The specular value of the material
+				uniform float materialShiniess,			//	The material shininess
+
+				uniform float emissiveBoost,			//	A value to extend the emissive light in the scene
+
+				uniform sampler2D colorTex,				//	The color map
+				uniform sampler2D normTex)				//	The normal map
+{
+	//------------------------------------------------------
+	// CALCULATING VECTORS
+	//------------------------------------------------------
+
+    float3x3 tangentMatrix = float3x3( normalize( IN.tangentW ),	//	Rotation matrix to transform the normal to world space
+                                       normalize( IN.binormalW ),
+                                       normalize( IN.normalW ) );
+
+	float3 normalTex = tex2D(normTex, IN.texCoord).xyz;				//	Fetch the normal in texture space
+	float3 normal = normalize(expand(normalTex));					//	Normalize and expand range-compress the normal in tangent space
+	normal = mul(normal,tangentMatrix);								//	Transform from tangent space to world-space
+																
+	float3 normLight = normalize(IN.lightDir - IN.positionW).xyz;	//	calculate light vector in world space and normalize it
+	//normLight = expand(normLight);									//	Expand vector -> enforces the bump; Just to show the effect on the walls(doesn't work on the back wall)
+	
+	float3 normView = normalize(IN.viewDir - IN.positionW).xyz;		//	calculate view vector in world space and normalize it
+	//normView = expand(normView);									//	Expand vector -> enforces the bump; Just to show the effect on the walls(doesn't work on the back wall)
+
+	float3 normHalfangle = normalize(normLight + normView);			//	calculate halfway vector and normalize it
+	
+
+	//------------------------------------------------------
+	// CALCULATING LIGHT AND REFLACTION
+	//------------------------------------------------------
+	
+	float specular = 0;
+	float diffuse = saturate(dot(normal, normLight));				//	Calculate diffuse dot product and clamps it to the range of [0,1] 
+
+	if(diffuse > 0)													//	Clamp when the diffuse term is clamped to 0
+	{
+		specular = pow(saturate(dot(normal, normHalfangle)),materialShiniess);	//	Calculate specular dot product and clamp it to the range of [0,1]
+	}
+
+	//------------------------------------------------------
+	// CALCULATING COLOR PASSES
+	//------------------------------------------------------
+	
+	float3 coloredTex		= tex2D(colorTex, IN.texCoord).xyz;						//	look up of color from the texture and the texture coordinates
+	float3 diffuseColor		= (materialDiffuse * IN.lightcolor * diffuse).xyz;		//	Calculating the diffuse color
+	float3 specularColor	= (materialSpecular * IN.lightcolor * specular).xyz;	//	Calculating the specular color
+
+	float3 Fcolor = coloredTex * ((materialEmissive * emissiveBoost) + (materialAmbient * globalAmbient) + diffuseColor + specularColor);
+
+	fragmentOut.xyz = Fcolor;
+	fragmentOut.w = 1;
+}

@@ -1,0 +1,44 @@
+struct vert2frag {
+  //float4 position : POSITION;
+  float4 lightcolor: COLOR0;
+  float2 texCoord  : TEXCOORD0;
+  float3 normal	   : TEXCOORD1;
+  float3 lightDir  : TEXCOORD2;
+  float3 viewDir   : TEXCOORD3;
+};
+
+void ffunc_specular(vert2frag IN,
+			out float4 fragmentOut : COLOR,
+			uniform float shiniess,
+			uniform float4 materialAmbient,
+			uniform float4 globalAmbient,
+			uniform float4 materialEmissive,
+			uniform sampler2D text )
+{
+  // sample texture and set output color with sampled value
+  float4 pureTexture = tex2D(text, IN.texCoord);
+
+  // calculate diffuse lighting (Lambert)
+  float3 Ln = normalize(IN.lightDir);
+  float3 Nn = normalize(IN.normal);
+  float diffuseLight = max(dot(Nn, Ln), 0);
+
+  float3 diffuse = pureTexture.rgb *  diffuseLight.xxx * IN.lightcolor.xyz;
+
+  // calculate specular lighting (Blinn)
+  float3 Vn = normalize(IN.viewDir);
+  float3 Hn = normalize(Ln + Vn);
+  float specularLight = pow(max(dot(Nn, Hn), 0), shiniess);
+  if (diffuseLight <= 0) specularLight = 0;
+
+  float3 specular = specularLight.xxx * IN.lightcolor.xyz;
+
+  fragmentOut.rgb = specular.xyz;
+
+  // add material parameters, ambient and emissive light
+  fragmentOut.rgb = diffuse.rgb + specular.rgb + ( materialAmbient.rgb * globalAmbient.rgb ) + materialEmissive.rgb;
+
+  //fragmentOut.rgb = float3(1,0,1);
+
+  fragmentOut.a = 1;
+}
